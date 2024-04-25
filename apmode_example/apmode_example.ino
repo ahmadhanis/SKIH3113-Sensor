@@ -57,6 +57,11 @@ void createWebServer() {
     content = "<html><head></head><body><h2>LED OFF</h2></body></htm>";
     server.send(200, "text/html", content);
   });
+  server.on("/dht", []() {
+    String temp = "27";
+    content = "<html><head></head><body><h2>TEMP:" + temp + "celcius</h2></body></htm>";
+    server.send(200, "text/html", content);
+  });
 }
 
 void loop() {
