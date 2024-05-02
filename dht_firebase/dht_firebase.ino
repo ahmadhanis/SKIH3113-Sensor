@@ -30,10 +30,10 @@ void setup() {
   Serial.println("WiFi connected");
 
   /* Assign the api key (required) */
-  config.api_key = "";
+  config.api_key = "AIzaSyBobpVpnt_0fTy-YcKqp_S8p5JEpa0CB-w";
 
   /* Assign the RTDB URL (required) */
-  config.database_url = "";
+  config.database_url = "https://my-iot-projects-d1d93-default-rtdb.asia-southeast1.firebasedatabase.app/";
 
   /* Sign up */
   if (Firebase.signUp(&config, &auth, "", "")) {
