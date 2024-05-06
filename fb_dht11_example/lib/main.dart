@@ -1,6 +1,7 @@
+import 'package:fb_dht11_example/firebase_options.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
+import 'package:intl/intl.dart';
 import 'package:firebase_database/firebase_database.dart';
 
 Future<void> main() async {
@@ -38,6 +39,8 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   String temp = "", hum = "";
+  String datetime = "";
+  String status = "On";
 
   @override
   Widget build(BuildContext context) {
@@ -52,12 +55,25 @@ class _MyHomePageState extends State<MyHomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
+            Text(datetime),
             Text(
               "Temperature: $temp °C",
               style: const TextStyle(fontSize: 24),
             ),
             Text("Humidity: $hum %", style: const TextStyle(fontSize: 24)),
             ElevatedButton(onPressed: loadData, child: const Text("Load Data")),
+            const SizedBox(height: 40),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton(
+                    onPressed: onSwitch, child: const Text("Switch")),
+                const SizedBox(
+                  width: 20,
+                ),
+                Text("Relay: $status"),
+              ],
+            )
           ],
         ),
       ),
@@ -79,8 +95,34 @@ class _MyHomePageState extends State<MyHomePage> {
         if (key == "humidity") {
           hum = value.toString();
         }
+        if (key == "relay") {
+          status = value.toString();
+        }
+        if (key == "time") {
+          String localDateTimeString = value.toString();
+          DateTime localDateTime = DateTime.fromMillisecondsSinceEpoch(
+              int.parse(localDateTimeString) * 1000);
+          Duration offset = Duration(hours: 8); // GMT+8
+          DateTime gmt8DateTime = localDateTime.add(offset);
+          datetime = DateFormat('dd-MM-yyyy HH:mm a').format(gmt8DateTime);
+        }
         setState(() {});
       });
     }
+  }
+
+  Future<void> onSwitch() async {
+    print(status);
+    if (status == "On") {
+      status = "Off";
+    }else{
+        status = "On";
+    }
+    
+    DatabaseReference ref = FirebaseDatabase.instance.ref("101");
+    await ref.update({
+      "relay": status,
+    });
+    setState(() {});
   }
 }
