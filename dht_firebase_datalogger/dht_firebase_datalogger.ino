@@ -1,3 +1,4 @@
+
 #include <ESP8266WiFi.h>
 #include <dht.h>
 #include <Firebase_ESP_Client.h>
@@ -19,16 +20,17 @@ String relay = "Off", prevRelay = "On";
 FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
+FirebaseJson json;
 
 WiFiUDP ntpUDP;
 const long utcOffsetInSeconds = 28800;  //UTC 8 offset UTC(8+) * 60*60
 NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds);
-String timestamp = "", datestamp = "";
+String timestamp = "", datestamp = "", hourstamp = "";
 
-//Week Days
-String weekDays[7] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
-//Month names
-String months[12] = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
+// //Week Days
+// String weekDays[7] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+// //Month names
+// String months[12] = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
 
 unsigned long sendDataPrevMillis = 0;
 int count = 0;
@@ -75,6 +77,7 @@ void loop() {
     sendDataPrevMillis = millis();
     datestamp = getDate();
     timestamp = getTime();
+    hourstamp = getHour();
     Serial.print("time: ");
     Serial.println(timestamp);
     // Write an Int number on the database path test/int
@@ -104,7 +107,7 @@ void loop() {
       Serial.println("FAILED");
       Serial.println("REASON: " + fbdo.errorReason());
     }
-    
+
 
     if (Firebase.RTDB.getString(&fbdo, "101/relay")) {
       Serial.println("PASSED");
@@ -123,6 +126,23 @@ void loop() {
           prevRelay = "On";
         }
       }
+      String tempPath = "/temperature";
+      String humPath = "/humidity";
+      String timePath = "/timestamp";
+      json.set(tempPath.c_str(), String(temp));
+      json.set(humPath.c_str(), String(hum));
+      //json.set(timePath, String(timestamp));
+
+      if (Firebase.RTDB.setJSON(&fbdo, "101/logger/" + datestamp + "/" + hourstamp + "/" + timestamp, &json)) {
+        Serial.println("PASSED");
+        Serial.println("PATH: " + fbdo.dataPath());
+        Serial.println("TYPE: " + fbdo.dataType());
+      } else {
+        Serial.println("FAILED");
+        Serial.println("REASON: " + fbdo.errorReason());
+      }
+
+
     } else {
       Serial.println(fbdo.errorReason());
     }
@@ -161,10 +181,17 @@ String getTime() {
   timeClient.update();
   time_t epochTime = timeClient.getEpochTime();
   struct tm* ptm = gmtime((time_t*)&epochTime);
-  String currentTime = String(timeClient.getHours()) + "-" + String(timeClient.getMinutes()) + "-" + String(timeClient.getSeconds());
+  String currentTime = String(timeClient.getHours()) + ":" + String(timeClient.getMinutes()) + ":" + String(timeClient.getSeconds());
   return currentTime;
 }
 
+String getHour() {
+  timeClient.update();
+  time_t epochTime = timeClient.getEpochTime();
+  struct tm* ptm = gmtime((time_t*)&epochTime);
+  String currentTime = String(timeClient.getHours());
+  return currentTime;
+}
 void getDHT() {
   int chk = DHT.read11(D4);
   Serial.print("Temperature=");
