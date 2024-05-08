@@ -21,8 +21,14 @@ FirebaseAuth auth;
 FirebaseConfig config;
 
 WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "pool.ntp.org");
-int timestamp;
+const long utcOffsetInSeconds = 28800;  //UTC 8 offset UTC(8+) * 60*60
+NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds);
+String timestamp = "", datestamp = "";
+
+//Week Days
+String weekDays[7] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+//Month names
+String months[12] = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
 
 unsigned long sendDataPrevMillis = 0;
 int count = 0;
@@ -63,10 +69,11 @@ void setup() {
 }
 
 void loop() {
-  
+
   if (Firebase.ready() && signupOK && (millis() - sendDataPrevMillis > 5000 || sendDataPrevMillis == 0)) {
     getDHT();
     sendDataPrevMillis = millis();
+    datestamp = getDate();
     timestamp = getTime();
     Serial.print("time: ");
     Serial.println(timestamp);
@@ -89,7 +96,7 @@ void loop() {
       Serial.println("REASON: " + fbdo.errorReason());
     }
 
-    if (Firebase.RTDB.setInt(&fbdo, "101/time", timestamp)) {
+    if (Firebase.RTDB.setString(&fbdo, "101/time", datestamp)) {
       Serial.println("PASSED");
       Serial.println("PATH: " + fbdo.dataPath());
       Serial.println("TYPE: " + fbdo.dataType());
@@ -97,14 +104,15 @@ void loop() {
       Serial.println("FAILED");
       Serial.println("REASON: " + fbdo.errorReason());
     }
+    
 
     if (Firebase.RTDB.getString(&fbdo, "101/relay")) {
       Serial.println("PASSED");
       Serial.println("PATH: " + fbdo.dataPath());
       Serial.println("TYPE: " + fbdo.dataType());
-      relay = fbdo .stringData();
+      relay = fbdo.stringData();
       Serial.println(relay);
-       Serial.println(prevRelay);
+      Serial.println(prevRelay);
       if (fbdo.dataType() == "string") {
         if (relay == "Off" && prevRelay == "On") {
           relayOp(0);
@@ -134,10 +142,27 @@ void relayOp(int st) {
   }
 }
 
-unsigned long getTime() {
+String getDate() {
   timeClient.update();
-  unsigned long now = timeClient.getEpochTime();
-  return now;
+  time_t epochTime = timeClient.getEpochTime();
+  struct tm* ptm = gmtime((time_t*)&epochTime);
+
+  int monthDay = ptm->tm_mday;
+  int currentMonth = ptm->tm_mon + 1;
+  int currentYear = ptm->tm_year + 1900;
+
+  String currentDate = String(monthDay) + "-" + String(currentMonth) + "-" + String(currentYear);
+  Serial.print("Current date: ");
+  Serial.println(currentDate);
+  return currentDate;
+}
+
+String getTime() {
+  timeClient.update();
+  time_t epochTime = timeClient.getEpochTime();
+  struct tm* ptm = gmtime((time_t*)&epochTime);
+  String currentTime = String(timeClient.getHours()) + "-" + String(timeClient.getMinutes()) + "-" + String(timeClient.getSeconds());
+  return currentTime;
 }
 
 void getDHT() {
