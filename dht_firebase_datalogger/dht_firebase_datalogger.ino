@@ -1,3 +1,7 @@
+//Coded by : Ahmad Hanis
+//Date:9/5/2024
+//Description: DHT Firebase with data logger
+
 #include <ESP8266WiFi.h>
 #include <dht.h>
 #include <Firebase_ESP_Client.h>
@@ -6,32 +10,28 @@
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 
-
 #define D4 2  //DHT11 Sensor connected to D4
+
 bool signupOK = false;
-dht DHT;
 const char* ssid = "UUMWiFi_Guest";
 const char* pass = "";
 int hum = 0, temp = 0;
 String relay = "Off", prevRelay = "On";
+String timestamp = "", datestamp = "", hourstamp = "";
+unsigned long sendDataPrevMillis = 0;
+int count = 0;
 
+dht DHT;
 //Define Firebase Data object
 FirebaseData fbdo;
 FirebaseAuth auth;
 FirebaseConfig config;
+FirebaseJson json;
 
 WiFiUDP ntpUDP;
 const long utcOffsetInSeconds = 28800;  //UTC 8 offset UTC(8+) * 60*60
 NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds);
-String timestamp = "", datestamp = "";
 
-//Week Days
-String weekDays[7] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
-//Month names
-String months[12] = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
-
-unsigned long sendDataPrevMillis = 0;
-int count = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -46,16 +46,11 @@ void setup() {
   Serial.println("");
   Serial.println("WiFi connected");
   timeClient.begin();
-
-  /* Assign the api key (required) */
   config.api_key = "AIzaSyBobpVpnt_0fTy-YcKqp_S8p5JEpa0CB-w";
-
-  /* Assign the RTDB URL (required) */
   config.database_url = "https://my-iot-projects-d1d93-default-rtdb.asia-southeast1.firebasedatabase.app/";
 
   /* Sign up */
   if (Firebase.signUp(&config, &auth, "", "")) {
-    Serial.println("ok");
     signupOK = true;
   } else {
     Serial.printf("%s\n", config.signer.signupError.message.c_str());
@@ -71,13 +66,15 @@ void setup() {
 void loop() {
 
   if (Firebase.ready() && signupOK && (millis() - sendDataPrevMillis > 5000 || sendDataPrevMillis == 0)) {
+    count++;
     getDHT();
     sendDataPrevMillis = millis();
+    // ntp get date/time/hour
     datestamp = getDate();
     timestamp = getTime();
-    Serial.print("time: ");
-    Serial.println(timestamp);
-    // Write an Int number on the database path test/int
+    hourstamp = getHour();
+
+    //update operation
     if (Firebase.RTDB.setInt(&fbdo, "101/humidity", hum)) {
       Serial.println("PASSED");
       Serial.println("PATH: " + fbdo.dataPath());
@@ -104,8 +101,8 @@ void loop() {
       Serial.println("FAILED");
       Serial.println("REASON: " + fbdo.errorReason());
     }
-    
 
+    //relay operation
     if (Firebase.RTDB.getString(&fbdo, "101/relay")) {
       Serial.println("PASSED");
       Serial.println("PATH: " + fbdo.dataPath());
@@ -122,6 +119,24 @@ void loop() {
           relayOp(1);
           prevRelay = "On";
         }
+      }
+
+      //data logger every 10 counter ++ (about 1 minute)
+      String tempPath = "/temperature";
+      String humPath = "/humidity";
+      String timePath = "/timestamp";
+      json.set(tempPath.c_str(), String(temp));
+      json.set(humPath.c_str(), String(hum));
+      if (count == 10) {
+        if (Firebase.RTDB.setJSON(&fbdo, "101/logger/" + datestamp + "/" + hourstamp + "/" + timestamp, &json)) {
+          Serial.println("PASSED");
+          Serial.println("PATH: " + fbdo.dataPath());
+          Serial.println("TYPE: " + fbdo.dataType());
+        } else {
+          Serial.println("FAILED");
+          Serial.println("REASON: " + fbdo.errorReason());
+        }
+        count = 0;
       }
     } else {
       Serial.println(fbdo.errorReason());
@@ -161,8 +176,16 @@ String getTime() {
   timeClient.update();
   time_t epochTime = timeClient.getEpochTime();
   struct tm* ptm = gmtime((time_t*)&epochTime);
-  String currentTime = String(timeClient.getHours()) + "-" + String(timeClient.getMinutes()) + "-" + String(timeClient.getSeconds());
+  String currentTime = String(timeClient.getHours()) + ":" + String(timeClient.getMinutes()) + ":" + String(timeClient.getSeconds());
   return currentTime;
+}
+
+String getHour() {
+  timeClient.update();
+  time_t epochTime = timeClient.getEpochTime();
+  struct tm* ptm = gmtime((time_t*)&epochTime);
+  String currentHour = String(timeClient.getHours());
+  return currentHour;
 }
 
 void getDHT() {
